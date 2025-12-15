@@ -6,7 +6,6 @@
 3. 为分类准备裁剪后的图像数据集（Long/Short/Ambiguous）
 """
 
-import os
 import shutil
 from pathlib import Path
 import random

@@ -3,7 +3,6 @@
 使用ResNet进行长翅/短翅分类
 """
 
-import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
