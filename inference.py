@@ -95,7 +95,52 @@ class FlyDetectionClassificationPipeline:
                 conf = box.conf[0].cpu().numpy()
                 boxes.append([x1, y1, x2, y2, conf])
 
-        return np.array(boxes) if boxes else np.array([]).reshape(0, 5)
+        boxes = np.array(boxes) if boxes else np.array([]).reshape(0, 5)
+
+        # 额外NMS去重，防止同一果蝇被多个框框住
+        if boxes.size > 0:
+            boxes = self.non_max_suppression(boxes, iou_thresh=0.5)
+
+        return boxes
+
+    @staticmethod
+    def non_max_suppression(boxes, iou_thresh=0.5):
+        """对同一类别执行NMS，移除高度重叠的框。
+
+        Args:
+            boxes: ndarray [N,5] -> [x1,y1,x2,y2,conf]
+            iou_thresh: IoU阈值，超过则去除置信度低的框
+        Returns:
+            ndarray [M,5]
+        """
+        if len(boxes) == 0:
+            return boxes
+
+        x1, y1, x2, y2, scores = boxes.T
+
+        areas = (x2 - x1) * (y2 - y1)
+        order = scores.argsort()[::-1]
+
+        keep = []
+        while order.size > 0:
+            i = order[0]
+            keep.append(i)
+
+            xx1 = np.maximum(x1[i], x1[order[1:]])
+            yy1 = np.maximum(y1[i], y1[order[1:]])
+            xx2 = np.minimum(x2[i], x2[order[1:]])
+            yy2 = np.minimum(y2[i], y2[order[1:]])
+
+            w = np.maximum(0.0, xx2 - xx1)
+            h = np.maximum(0.0, yy2 - yy1)
+            inter = w * h
+
+            iou = inter / (areas[i] + areas[order[1:]] - inter + 1e-6)
+
+            inds = np.where(iou <= iou_thresh)[0]
+            order = order[inds + 1]
+
+        return boxes[keep]
 
     def classify_fly(self, image, box):
         """对检测到的果蝇进行分类
@@ -167,9 +212,9 @@ class FlyDetectionClassificationPipeline:
                 crop_path.parent.mkdir(parents=True, exist_ok=True)
                 cropped.save(crop_path)
 
-        # 可视化并保存
+        # 可视化并保存（传入PIL图像对象，确保坐标系一致）
         if save_path:
-            self.visualize_results(image_path, results, save_path)
+            self.visualize_results(image, results, save_path)
 
         return results
 
@@ -229,15 +274,20 @@ class FlyDetectionClassificationPipeline:
 
         return all_results, stats
 
-    def visualize_results(self, image_path, results, save_path):
-        """可视化检测和分类结果"""
-        # 读取图像
-        image = cv2.imread(str(image_path))
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    def visualize_results(self, image, results, save_path):
+        """可视化检测和分类结果
+        
+        Args:
+            image: PIL Image 对象（与检测时使用的同一图像）
+            results: 检测和分类结果
+            save_path: 保存路径
+        """
+        # 转换PIL图像为numpy数组用于matplotlib显示
+        image_np = np.array(image)
 
         # 绘制
         fig, ax = plt.subplots(1, figsize=(12, 12))
-        ax.imshow(image)
+        ax.imshow(image_np)
 
         colors = {'Long': 'green', 'Short': 'red'}
 
@@ -267,7 +317,7 @@ class FlyDetectionClassificationPipeline:
 
 def main():
     # 配置路径
-    detection_model_path = "runs/detect/fly_detector/weights/best.pt"
+    detection_model_path = "runs/detect/fly_detector3/weights/best.pt"
     classification_model_path = "runs/classification/best_model.pth"
 
     # 创建推理流程
@@ -281,11 +331,11 @@ def main():
 
     # 选择处理模式
     # 移除sys.argv相关逻辑，直接使用默认值，确保路径正确设置
-    mode = 'batch' # 强制设置为批量处理模式
+    mode = 'multi' # 强制设置为批量处理模式
 
     if mode == 'single':
         # 单张图像测试
-        image_path = "data/flys/MVIMG_20251202_153157.jpg" # 示例路径，可能需要根据实际情况修改
+        image_path = "processed_data/detection/val/images/Image_20251203142711_15_13.jpg" # 示例路径，可能需要根据实际情况修改
         output_path = "test_output.jpg"
         results = pipeline.process_image(image_path, save_path=output_path,
                                         save_crops=True, crops_dir='test_crops')
@@ -297,7 +347,7 @@ def main():
 
     else:
         # 批量处理
-        image_dir = "/content/processed_data/detection/val/images"
+        image_dir = "processed_data/detection/val/images"
         print(f"正在使用以下目录进行推理: {image_dir}")
 
         output_dir = "inference_results"
