@@ -3,7 +3,6 @@
 使用YOLOv8进行果蝇检测（不区分类别）
 """
 
-import os
 from pathlib import Path
 from ultralytics import YOLO
 import torch
@@ -116,7 +115,7 @@ def main():
     # 创建训练器
     trainer = FlyDetectionTrainer(
         data_yaml=data_yaml,
-        model_name='yolov8n.pt',  # 可选: yolov8s.pt, yolov8m.pt, yolov8l.pt, yolov8x.pt
+        model_name='yolo11n.pt',  # 可选: yolov8s.pt, yolov8m.pt, yolov8l.pt, yolov8x.pt
         epochs=100,
         img_size=640,
         batch_size=16,
