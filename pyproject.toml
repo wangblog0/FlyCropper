@@ -1,0 +1,133 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fly-cropper"
+version = "1.0.0"
+description = "果蝇检测与翅膀分类系统 - 基于深度学习的两阶段目标检测与分类方案"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "FlyCropper Team"}
+]
+keywords = ["deep-learning", "computer-vision", "object-detection", "classification", "yolo", "pytorch"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+
+dependencies = [
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "ultralytics>=8.0.0",
+    "pillow>=9.0.0",
+    "numpy>=1.21.0",
+    "opencv-python>=4.5.0",
+    "matplotlib>=3.5.0",
+    "seaborn>=0.11.0",
+    "tqdm>=4.62.0",
+    "scikit-learn>=1.0.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=3.0.0",
+    "black>=22.0.0",
+    "flake8>=4.0.0",
+    "isort>=5.10.0",
+    "mypy>=0.950",
+]
+
+jupyter = [
+    "jupyter>=1.0.0",
+    "jupyterlab>=3.0.0",
+    "ipywidgets>=7.6.0",
+]
+
+all = [
+    "fly-cropper[dev,jupyter]",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/fly-cropper"
+Repository = "https://github.com/yourusername/fly-cropper"
+"Bug Tracker" = "https://github.com/yourusername/fly-cropper/issues"
+
+[project.scripts]
+fly-prepare-data = "data_preparation:main"
+fly-train-detection = "train_detection:main"
+fly-train-classification = "train_classification:main"
+fly-inference = "inference:main"
+
+[tool.setuptools]
+packages = ["fly_cropper"]
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | runs
+  | processed_data
+  | inference_results
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+skip_gitignore = true
+known_first_party = ["fly_cropper"]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --cov=fly_cropper --cov-report=term-missing --cov-report=html"
+
+[tool.coverage.run]
+source = ["fly_cropper"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]

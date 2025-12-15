@@ -1,64 +1,256 @@
-# FlyCropper（果蝇裁切器）
+# 果蝇检测与翅膀分类系统
 
-简介
--	FlyCropper 是一个用于处理 Label Studio 导出标注（JSON）的工具。它会根据标注中的矩形框（百分比坐标）裁切源图像，并将裁切结果按分类标签保存到不同的文件夹中。
+基于深度学习的两阶段方案：目标检测 + 分类
 
-主要特性
--	支持来自多个来源文件夹的图片（例如 `flys/`、`flys2/` 等），直接使用 JSON 中的路径信息查找图片。
--	同一图片可包含多个标注框，都会被单独裁切并保存。
--	跨文件夹处理重名图片时，会为同一基础文件名维护全局递增的裁切序号（例如 `1_crop_1.jpg`, `1_crop_2.jpg`, `1_crop_3.jpg`），保证不覆盖已有裁切结果。
--	按分类标签（例如 `Long`、`Short`）将裁切图像保存到对应子目录下：`cropped_flies/<label>/`。
+## 项目特点
 
-要求
--	Python 3.8+
--	Pillow（用于图像读取与裁切）
+- **两阶段方案**：先检测果蝇位置，再对检测到的果蝇进行长短翅分类
+- **高精度**：解耦检测和分类，各自达到更好的效果
+- **易扩展**：模块化设计，方便修改和扩展
 
-安装依赖
-```powershell
-python -m pip install --upgrade pip
-python -m pip install pillow
+## 环境要求
+
+- Python 3.8+
+- CUDA 11.x+ (可选，用于GPU加速)
+
+## 安装
+
+### 方法1：使用 pip 和 requirements.txt
+
+```bash
+# 创建虚拟环境
+python -m venv .venv
+.venv\Scripts\activate  # Windows
+# source .venv/bin/activate  # Linux/Mac
+
+# 安装依赖
+pip install -r requirements.txt
 ```
 
-运行
-```powershell
-python crop_flies.py
+### 方法2：使用 pyproject.toml (推荐)
+
+```bash
+# 创建虚拟环境
+python -m venv .venv
+.venv\Scripts\activate
+
+# 安装项目及依赖
+pip install -e .
+
+# 或者安装所有依赖（包括开发工具）
+pip install -e ".[all]"
 ```
 
-脚本位置
--	主脚本：`crop_flies.py`
--	JSON：脚本中默认使用项目根目录下的 `project-1-at-*.json` 文件，你可以在脚本顶部修改 `json_file` 变量以指定其他导出文件。
+## 使用流程
 
-JSON 要求
--	支持 Label Studio 导出的任务列表格式。脚本会读取每项任务的 `data.image` 字段，该字段通常是相对路径，例如 `flys/MVIMG_20251202_153157.jpg` 或 `flys2/1.jpg`。脚本会把该路径拼接到项目根目录来定位源图片文件。
+### 1. 数据准备
 
-输出说明
--	所有裁切结果会存放在项目根目录下的 `cropped_flies/` 目录中，按标签分类：
-```
-cropped_flies/
-├─ Long/
-│  ├─ 1_crop_1.jpg
-│  └─ 1_crop_3.jpg
-└─ Short/
-   └─ 2_crop_1.jpg
+将COCO格式数据转换为检测和分类所需的格式：
+
+```bash
+python data_preparation.py
 ```
 
-命名与重名处理逻辑
--	输出文件名基于源文件的基础名（不含文件夹和扩展名），加上 `_crop_<N>` 后缀，其中 `<N>` 为对该基础名的全局递增序号（跨源文件夹）。例如：
-  - `flys/1.jpg` 有两处标注，生成 `1_crop_1.jpg`、`1_crop_2.jpg`。
-  - `flys2/1.jpg` 另有一处标注，生成 `1_crop_3.jpg`（序号接着之前的两个）。
+这将生成：
+- `processed_data/detection/` - YOLO格式的检测数据
+- `processed_data/classification/` - 裁剪后的分类数据
 
-注意事项
--	如果 JSON 中引用的图片不存在，脚本会在控制台打印警告并跳过。
--	裁切区域使用 Label Studio 的百分比坐标（`x,y,width,height`），脚本会自动转换为像素并确保坐标在图像范围内。
--	脚本当前默认使用项目根目录下的 JSON 文件名（在 `crop_flies.py` 中配置）。如果你希望通过命令行传参运行，我可以帮你改造脚本来接受 `--json` 与 `--out` 参数。
+### 2. 训练检测模型
 
-示例：场景说明
--	假设：
-  - `flys/1.jpg` 内标注 2 个目标 → 生成 `cropped_flies/<label>/1_crop_1.jpg`, `1_crop_2.jpg`
-  - `flys2/1.jpg` 再标注 1 个目标 → 生成 `cropped_flies/<label>/1_crop_3.jpg`
+```bash
+python train_detection.py
+```
 
-许可证
--	MIT（你可以根据需要修改或移除许可证）
+训练完成后，模型保存在 `runs/detect/fly_detector/weights/best.pt`
 
-联系方式
--	如需我把脚本改为支持命令行参数或批量处理多个 JSON（或添加 `requirements.txt`），告诉我我会继续完善。
+可选参数（在脚本中修改）：
+- `model_name`: yolov8n.pt (nano), yolov8s.pt (small), yolov8m.pt (medium), yolov8l.pt (large)
+- `epochs`: 训练轮数，默认100
+- `img_size`: 图像尺寸，默认640
+- `batch_size`: 批次大小，默认16
+
+### 3. 训练分类模型
+
+```bash
+python train_classification.py
+```
+
+训练完成后，模型保存在 `runs/classification/best_model.pth`
+
+可选参数（在脚本中修改）：
+- `model_name`: resnet18, resnet50, efficientnet_b0, mobilenet_v2
+- `epochs`: 训练轮数，默认50
+- `img_size`: 图像尺寸，默认224
+- `batch_size`: 批次大小，默认32
+
+### 4. 推理测试
+
+#### 单张图像测试
+
+```bash
+python inference.py single data/flys/MVIMG_20251202_153157.jpg
+```
+
+#### 批量处理
+
+```bash
+python inference.py batch processed_data/detection/val/images
+```
+
+结果保存在 `inference_results/` 目录：
+- `visualizations/` - 可视化结果
+- `crops/` - 裁剪的果蝇图像（按类别分类）
+- `results.json` - 详细检测结果
+- `statistics.json` - 统计信息
+
+## 项目结构
+
+```
+FlyCropper/
+├── data/                          # 原始数据
+│   ├── result.json               # COCO标注文件
+│   ├── flys/                     # 图像目录1
+│   ├── flys2/                    # 图像目录2
+│   └── ...
+├── processed_data/               # 处理后的数据
+│   ├── detection/               # 检测数据（YOLO格式）
+│   └── classification/          # 分类数据（裁剪图像）
+├── runs/                         # 训练输出
+│   ├── detect/                  # 检测模型
+│   └── classification/          # 分类模型
+├── inference_results/           # 推理结果
+├── data_preparation.py          # 数据准备脚本
+├── train_detection.py           # 检测训练脚本
+├── train_classification.py      # 分类训练脚本
+├── inference.py                 # 推理脚本
+├── requirements.txt             # 依赖列表
+├── pyproject.toml              # 项目配置
+└── README.md                    # 本文件
+```
+
+## 数据集格式
+
+### 输入格式（COCO）
+
+```json
+{
+  "images": [
+    {"id": 0, "file_name": "flys/xxx.jpg", "width": 3072, "height": 4096}
+  ],
+  "annotations": [
+    {"id": 0, "image_id": 0, "category_id": 1, "bbox": [x, y, w, h]}
+  ],
+  "categories": [
+    {"id": 0, "name": "Ambiguous"},
+    {"id": 1, "name": "Long"},
+    {"id": 2, "name": "Short"}
+  ]
+}
+```
+
+## 模型性能
+
+### 检测模型（YOLOv8）
+- 输入尺寸：640×640
+- 检测类别：fly（所有果蝇）
+- 评估指标：mAP50, mAP50-95, Precision, Recall
+
+### 分类模型（ResNet50）
+- 输入尺寸：224×224
+- 分类类别：Long（长翅）、Short（短翅）
+- 评估指标：Accuracy, Precision, Recall, F1-Score
+
+## 常见问题
+
+### 1. CUDA内存不足
+
+减小 batch_size：
+- 检测：16 → 8 或 4
+- 分类：32 → 16 或 8
+
+或使用更小的模型：
+- 检测：yolov8n.pt (最小)
+- 分类：resnet18 或 mobilenet_v2
+
+### 2. 训练速度慢
+
+- 确保安装了GPU版本的PyTorch
+- 减小图像尺寸
+- 使用更小的模型
+
+### 3. 准确率不高
+
+- 增加训练轮数
+- 调整数据增强参数
+- 尝试不同的模型架构
+- 检查数据集质量和标注准确性
+
+## 进阶使用
+
+### 自定义训练参数
+
+修改训练脚本中的参数，例如：
+
+```python
+# train_detection.py
+trainer = FlyDetectionTrainer(
+    data_yaml=data_yaml,
+    model_name='yolov8m.pt',  # 使用中等模型
+    epochs=150,               # 增加训练轮数
+    img_size=1024,            # 增大图像尺寸
+    batch_size=8,             # 减小批次
+)
+```
+
+### 使用自定义数据集
+
+修改 `data_preparation.py` 中的路径：
+
+```python
+coco_json_path = "your_data/annotations.json"
+data_root = "your_data"
+output_root = "your_processed_data"
+```
+
+### 导出ONNX模型
+
+```python
+from ultralytics import YOLO
+
+# 加载模型
+model = YOLO('runs/detect/fly_detector/weights/best.pt')
+
+# 导出为ONNX
+model.export(format='onnx')
+```
+
+## 开发
+
+### 代码格式化
+
+```bash
+pip install black isort
+black .
+isort .
+```
+
+### 运行测试
+
+```bash
+pip install pytest pytest-cov
+pytest
+```
+
+## 许可证
+
+MIT License
+
+## 作者
+
+FlyCropper Team
+
+## 致谢
+
+- [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics)
+- [PyTorch](https://pytorch.org/)
+- [Torchvision](https://github.com/pytorch/vision)
